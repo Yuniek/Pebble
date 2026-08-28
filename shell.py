@@ -2,6 +2,13 @@ import pebble
 
 while True:
     text = input('pebble > ')
+
     if text == 'bye()': exit()
-    result = pebble.run(text)
-    if result is not None:print(result)
+
+    try:
+        result = pebble.run(text)
+        if result is not None:
+            print(result)
+            
+    except pebble.PebbleError as error:
+        print(error)

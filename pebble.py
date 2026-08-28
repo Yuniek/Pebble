@@ -42,7 +42,7 @@ class Lexer:
     def tokenize(self) -> list[Token]:
         tokens = []
 
-        pattern = '|'.join(f'(?P<{name}>{patern})' for name, patern in TOKEN_TYPES)
+        pattern = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in TOKEN_TYPES)
 
         position = 0
 
@@ -85,7 +85,15 @@ class NumberNode(ASTNode):
 
     def __repr__(self) -> str:
         return f'NumberNode({self.number})'
-    
+
+class UnaryOperation(ASTNode):
+    def __init__(self, op:str, operand:ASTNode):
+        self.op = op
+        self.operand = operand
+
+    def __repr__(self):
+        return f'({self.op} {self.operand})'
+
 class BinaryOperation(ASTNode):
     def __init__(self, left:ASTNode, op:str, right:ASTNode):
         self.left = left
@@ -123,6 +131,12 @@ class Parser:
             )
 
         return node
+
+    def parse_unary(self)->ASTNode:
+        op = self.current_token().type
+        self.advance()
+        operand = self.parse_factor()
+        return UnaryOperation(op, operand)
     
     def parse_factor(self)->ASTNode:
         current = self.current_token()
@@ -130,7 +144,7 @@ class Parser:
             self.advance()
             return NumberNode(current.value)
 
-        if current.type == 'LPAREN':
+        elif current.type == 'LPAREN':
             self.advance()
             node = self.parse_expression()
             if self.current_token().type != 'RPAREN':
@@ -142,12 +156,15 @@ class Parser:
             self.advance()
             return node
 
+        if current.type in ('PLUS', 'MINUS'):
+            return self.parse_unary()
+
         raise InvalidSyntaxError(
             self.current_token().pos['start'],
             self.current_token().pos['end'],
-            f"Expected a number or '(', got {current.type}"
+            f"Expected a number, '(', '+', or '-', got {current.type}"
         )
-        
+
     def parse_term(self)->ASTNode:
         left = self.parse_factor()
 
@@ -184,6 +201,13 @@ class Interpreter:
             return self.evaluate(self.ast)
         if isinstance(ast, NumberNode):
             return ast.number
+        if isinstance(ast, UnaryOperation):
+            if ast.op == 'PLUS':
+                return self.evaluate(ast.operand)
+            if ast.op == 'MINUS':
+                return self.evaluate(ast.operand) * -1
+            else:
+                raise PebbleRuntimeError(f"Unexpected Unary Operator {ast.op}")
         if isinstance(ast, BinaryOperation):
             left = self.evaluate(ast.left)            
             right = self.evaluate(ast.right)
