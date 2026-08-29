@@ -2,7 +2,7 @@
 
 Pebble is a small interpreted programming language built from scratch in Python.
 
-The project is focused on understanding the fundamental components of a programming language, including lexical analysis, parsing, abstract syntax trees, and interpretation.
+The project focuses on understanding the core components of a programming language, including **lexical analysis, parsing, abstract syntax trees, interpretation, variables, and runtime environments**.
 
 Pebble is currently under active development, with new language features being added incrementally.
 
@@ -10,30 +10,35 @@ Pebble is currently under active development, with new language features being a
 
 ## Current Version
 
-**V1.1 — Unary Operators**
+**V1.2 — Variable Language**
 
 Pebble currently supports:
 
-- Integers and floating-point numbers
-- Addition, subtraction, multiplication, and division
-- Operator precedence
-- Parentheses and nested parentheses
-- Unary `+` and `-` operators
-- Basic lexical, syntax, and runtime error handling
+* Integers and floating-point numbers
+* Addition, subtraction, multiplication, and division
+* Operator precedence
+* Parentheses and nested parentheses
+* Unary `+` and `-` operators
+* Variables and assignment
+* Runtime environment for storing variables
+* Basic lexical, syntax, and runtime error handling
+* Interactive REPL
 
 Example:
 
 ```text
-pebble > 2 + 3 * 4
-14
+pebble > x = 10
+10
 
-pebble > -(2 + 3)
--5
+pebble > x + 5
+15
 
-pebble > 5 * -3
--15
+pebble > x * 2
+20
 ```
+
 ---
+
 ## How Pebble Works
 
 Pebble processes code through several stages:
@@ -51,24 +56,30 @@ AST
     ↓
 Interpreter
     ↓
+Environment
+    ↓
 Result
 ```
 
 ### Lexer
 
-The lexer reads the source code and converts it into **tokens** such as numbers, operators, and parentheses.
+The lexer reads the source code and converts it into **tokens** such as numbers, identifiers, operators, and parentheses.
 
 ### Parser
 
 The parser processes those tokens according to Pebble's syntax rules and builds an **Abstract Syntax Tree (AST)**.
 
-The AST represents the structure of the expression rather than the original text.
+The AST represents the structure of the code rather than the original text.
 
 ### Interpreter
 
-The interpreter evaluates the AST and produces the final result.
+The interpreter evaluates the AST and produces the result.
 
-This architecture allows Pebble to grow into a larger programming language without directly executing the source code as Python.
+### Environment
+
+The environment stores variables and their values during execution, allowing values to be reused in later expressions.
+
+This structure gives Pebble a foundation for adding more programming-language features over time.
 
 ---
 
@@ -76,6 +87,7 @@ This architecture allows Pebble to grow into a larger programming language witho
 
 ```text
 Pebble/
+
 ├── pebble.py
 ├── README.md
 └── shell.py
@@ -89,6 +101,7 @@ Contains the core implementation of the Pebble language:
 * Parser
 * AST nodes
 * Interpreter
+* Environment
 * Error handling
 * `run()` function
 
@@ -118,7 +131,7 @@ You will see:
 pebble >
 ```
 
-You can then enter Pebble expressions:
+You can then enter Pebble code:
 
 ```text
 pebble > 10 + 5
@@ -127,8 +140,11 @@ pebble > 10 + 5
 pebble > 2 * (3 + 4)
 14
 
-pebble > -10 / 2
--5.0
+pebble > x = 10
+10
+
+pebble > x + 5
+15
 ```
 
 To exit the REPL:
@@ -143,7 +159,7 @@ pebble > bye()
 
 ### V1 — Arithmetic Language
 
-The first working version of Pebble established the core language pipeline.
+The first working version established Pebble's core language pipeline.
 
 Introduced:
 
@@ -158,11 +174,9 @@ Introduced:
 * Basic error handling
 * Interactive REPL
 
-This version established the foundation on which later versions are being built.
-
 ### V1.1 — Unary Operators
 
-V1.1 extends the arithmetic system with **unary operators**.
+V1.1 extended the arithmetic system with **unary operators**.
 
 Added:
 
@@ -177,22 +191,44 @@ Examples:
 
 ```text
 -5
+
 +5
+
 --5
+
 -(2 + 3)
+
 5 * -3
+
 2 + -3 * 4
+```
+
+### V1.2 — Variable Language
+
+V1.2 introduces the foundation for storing and reusing values through **variables**.
+
+Added:
+
+* Identifiers
+* Variable assignment
+* Variable environment
+* Variable-based expressions
+
+Example:
+
+```text
+x = 10
+
+x + 5
 ```
 
 ---
 
 ## Development
 
-Pebble is still an evolving project.
+Pebble is still an evolving project. New language features will be added as development continues.
 
-Future versions will gradually introduce additional programming-language features such as variables, boolean values, control flow, functions, strings, and other language constructs.
-
-The language design and implementation may change as the project develops.
+The language design and implementation may change as Pebble grows.
 
 ---
 

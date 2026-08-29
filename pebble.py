@@ -11,19 +11,22 @@ import re
 TOKEN_TYPES = [
     ('FLOAT',   r'\d+\.\d+'),
     ('INT',     r'\d+'),
+    ('EQUAL',    r'='),
     ('PLUS',    r'\+'),
     ('MINUS',   r'-'),
     ('MUL',     r'\*'),
     ('DIV',     r'/'),
     ('LPAREN',  r'\('),
     ('RPAREN',  r'\)'),
+    ('STRING',  r'\".*?\"'),
+    ('IDENTIFIER',  r'[A-Za-z_][A-Za-z0-9_]*'),
     ('WHITESPACE', r'\s+'),
 ]
 
 class Token:
-    def __init__(self, token_type, value:int|float|None, pos:dict[str, int]):
+    def __init__(self, token_type, value:int|float|str|None, pos:dict[str, int]):
         self.type:str = token_type
-        self.value:int|float|None = value
+        self.value:int|float|str|None = value
         self.pos = pos
 
     def __repr__(self)->str:
@@ -58,6 +61,10 @@ class Lexer:
                 value = float(value)
             elif token_type == 'INT':
                 value = int(value)
+            elif token_type == 'STRING':
+                value = value[1:-1]
+            elif token_type == 'IDENTIFIER':
+                value = value
             else:
                 value = None
             tokens.append(Token(token_type, value, {'start':match.start(), 'end':match.end()}))
@@ -80,11 +87,25 @@ class ASTNode:
     pass
 
 class NumberNode(ASTNode):
-    def __init__(self, number):
-        self.number = number
+    def __init__(self, value):
+        self.value = value
 
     def __repr__(self) -> str:
-        return f'NumberNode({self.number})'
+        return f'NumberNode({self.value})'
+
+class StringNode(ASTNode):
+    def __init__(self, value):
+            self.value = value
+
+    def __repr__(self) -> str:
+        return f'StringNode({self.value})'
+
+class IdentifierNode(ASTNode):
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"Identifier({self.value})"
 
 class UnaryOperation(ASTNode):
     def __init__(self, op:str, operand:ASTNode):
@@ -102,6 +123,14 @@ class BinaryOperation(ASTNode):
 
     def __repr__(self) -> str:
         return f'({self.left} {self.op} {self.right})'
+
+class AssignmentNode(ASTNode):
+    def __init__(self, identifier:IdentifierNode, expression):
+        self.identifier = identifier
+        self.expression = expression
+
+    def __repr__(self):
+        return f"{self.identifier} = {self.expression}"
 
 # ##################################
 # Parser
@@ -121,7 +150,10 @@ class Parser:
 
     def parse(self):
         if len(self.tokens) < 2: return
-        node = self.parse_expression()
+        if self.current_token().type == 'IDENTIFIER' and self.tokens[self.position+1].type == 'EQUAL':
+            node = self.parse_identifier()
+        else:
+            node = self.parse_expression()
 
         if self.current_token().type != 'EOF':
             raise InvalidSyntaxError(
@@ -131,6 +163,19 @@ class Parser:
             )
 
         return node
+
+    def parse_identifier(self)->ASTNode:
+        identifier = IdentifierNode(self.current_token().value)
+        self.advance()
+        if self.current_token().type != "EQUAL":
+            raise InvalidSyntaxError(
+                self.current_token().pos['start'],
+                self.current_token().pos['end'],
+                f"Expected '=' after identifier token but got {self.current_token().type}"
+            )
+        self.advance()
+        expression = self.parse_expression()
+        return AssignmentNode(identifier, expression)
 
     def parse_unary(self)->ASTNode:
         op = self.current_token().type
@@ -156,8 +201,12 @@ class Parser:
             self.advance()
             return node
 
-        if current.type in ('PLUS', 'MINUS'):
+        elif current.type in ('PLUS', 'MINUS'):
             return self.parse_unary()
+
+        elif current.type == 'IDENTIFIER':
+            self.advance()
+            return IdentifierNode(current.value)
 
         raise InvalidSyntaxError(
             self.current_token().pos['start'],
@@ -192,15 +241,28 @@ class Parser:
 # Interpreter
 # ##################################
 
+class Environment:
+    def __init__(self):
+        self.environment = {}
+    def setVariable(self, var_name:str, var_value:str|int|float|None):
+        self.environment[var_name] = var_value
+    def getVariable(self, var_name:str):
+        if var_name not in self.environment:
+            raise PebbleRuntimeError(f"Unknown variable {var_name}")
+        return self.environment[var_name]
+
 class Interpreter:
-    def __init__(self, ast:ASTNode):
+    def __init__(self, ast:ASTNode, env:Environment):
         self.ast = ast
+        self.env = env
 
     def evaluate(self, ast:ASTNode|None=None):
         if ast is None:
             return self.evaluate(self.ast)
         if isinstance(ast, NumberNode):
-            return ast.number
+            return ast.value
+        if isinstance(ast, IdentifierNode):
+            return self.env.getVariable(ast.value)
         if isinstance(ast, UnaryOperation):
             if ast.op == 'PLUS':
                 return self.evaluate(ast.operand)
@@ -224,7 +286,10 @@ class Interpreter:
                 return left / right
             else:
                 raise PebbleRuntimeError(f"Unexpected Operator {op}")
-                
+        if isinstance(ast, AssignmentNode):
+            identifier = ast.identifier.value
+            expression = self.evaluate(ast.expression)
+            self.env.setVariable(identifier, expression)
 
 # ##################################
 # Errors
@@ -261,18 +326,20 @@ class PebbleRuntimeError(PebbleError):
 # Run function to execute the code
 # ##################################
 
-def run(text:str):
+def run(text:str, env):
     """
     text should be a pebble code.
     """
     lexer = Lexer(text)
     tokens = lexer.tokenize()
+    print(tokens)
 
     parser = Parser(tokens)
     ast = parser.parse()
+    print(ast)
 
     if ast is None:
         return None
 
-    interpreter = Interpreter(ast)
+    interpreter = Interpreter(ast, env)
     return interpreter.evaluate()
