@@ -9,18 +9,28 @@ import re
 # ##################################
 
 TOKEN_TYPES = [
-    ('FLOAT',   r'\d+\.\d+'),
-    ('INT',     r'\d+'),
-    ('EQUAL',    r'='),
-    ('PLUS',    r'\+'),
-    ('MINUS',   r'-'),
-    ('MUL',     r'\*'),
-    ('DIV',     r'/'),
-    ('LPAREN',  r'\('),
-    ('RPAREN',  r'\)'),
-    ('STRING',  r'\".*?\"'),
-    ('IDENTIFIER',  r'[A-Za-z_][A-Za-z0-9_]*'),
-    ('WHITESPACE', r'\s+'),
+    ('KEYWORD',          r'\b(true|false)\b'),
+    ('FLOAT',            r'\d+\.\d+'),
+    ('INT',              r'\d+'),
+    ('GREATER_OR_EQUAL', r'>='),
+    ('LESSER_OR_EQUAL',  r'<='),
+    ('GREATER',          r'>'),
+    ('LESSER',           r'<'),
+    ('EQUALITY',         r'=='),
+    ('NOT_EQUAL',        r'!='),
+    ('AND',              r'and'),
+    ('OR',               r'or'),
+    ('NOT',              r'not'),
+    ('EQUAL',            r'='),
+    ('PLUS',             r'\+'),
+    ('MINUS',            r'-'),
+    ('MUL',              r'\*'),
+    ('DIV',              r'/'),
+    ('LPAREN',           r'\('),
+    ('RPAREN',           r'\)'),
+    ('STRING',           r'\".*?\"'),
+    ('IDENTIFIER',       r'[A-Za-z_][A-Za-z0-9_]*'),
+    ('WHITESPACE',       r'\s+'),
 ]
 
 class Token:
@@ -65,6 +75,8 @@ class Lexer:
                 value = value[1:-1]
             elif token_type == 'IDENTIFIER':
                 value = value
+            elif token_type == 'KEYWORD':
+                value = value
             else:
                 value = None
             tokens.append(Token(token_type, value, {'start':match.start(), 'end':match.end()}))
@@ -92,6 +104,13 @@ class NumberNode(ASTNode):
 
     def __repr__(self) -> str:
         return f'NumberNode({self.value})'
+
+class BooleanNode(ASTNode):
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f'BooleanNode({self.value})'
 
 class StringNode(ASTNode):
     def __init__(self, value):
@@ -132,6 +151,15 @@ class AssignmentNode(ASTNode):
     def __repr__(self):
         return f"{self.identifier} = {self.expression}"
 
+class BooleanOperation(ASTNode):
+    def __init__(self, left:ASTNode, op:str, right:ASTNode):
+        self.left = left
+        self.op = op
+        self.right = right
+        
+    def __repr__(self) -> str:
+        return f'({self.left} {self.op} {self.right})'
+
 # ##################################
 # Parser
 # ##################################
@@ -153,7 +181,7 @@ class Parser:
         if self.current_token().type == 'IDENTIFIER' and self.tokens[self.position+1].type == 'EQUAL':
             node = self.parse_identifier()
         else:
-            node = self.parse_expression()
+            node = self.parse_or()
 
         if self.current_token().type != 'EOF':
             raise InvalidSyntaxError(
@@ -174,7 +202,7 @@ class Parser:
                 f"Expected '=' after identifier token but got {self.current_token().type}"
             )
         self.advance()
-        expression = self.parse_expression()
+        expression = self.parse_or()
         return AssignmentNode(identifier, expression)
 
     def parse_unary(self)->ASTNode:
@@ -188,10 +216,14 @@ class Parser:
         if current.type in ('INT', 'FLOAT'):
             self.advance()
             return NumberNode(current.value)
+        
+        if current.type == 'KEYWORD' and current.value in ('true', 'false'):
+            self.advance()
+            return BooleanNode(True) if current.value == 'true' else BooleanNode(False)
 
         elif current.type == 'LPAREN':
             self.advance()
-            node = self.parse_expression()
+            node = self.parse_or()
             if self.current_token().type != 'RPAREN':
                 raise InvalidSyntaxError(
                     self.current_token().pos['start'],
@@ -201,7 +233,7 @@ class Parser:
             self.advance()
             return node
 
-        elif current.type in ('PLUS', 'MINUS'):
+        elif current.type in ('PLUS', 'MINUS', 'NOT'):
             return self.parse_unary()
 
         elif current.type == 'IDENTIFIER':
@@ -218,11 +250,11 @@ class Parser:
         left = self.parse_factor()
 
         while self.current_token().type in ('MUL', 'DIV'):
-            op = self.current_token()
+            op = self.current_token().type
             self.advance()
             right = self.parse_factor()
 
-            left = BinaryOperation(left, op.type, right)
+            left = BinaryOperation(left, op, right)
         
         return left
 
@@ -230,13 +262,46 @@ class Parser:
         left = self.parse_term()
 
         while self.current_token().type in ('PLUS', 'MINUS'):
-            op = self.current_token()
+            op = self.current_token().type
             self.advance()
             right = self.parse_term()
 
-            left = BinaryOperation(left, op.type, right)
+            left = BinaryOperation(left, op, right)
         return left
- 
+
+    def parse_comparison(self)->ASTNode:
+        left = self.parse_expression()
+
+        while self.current_token().type in ("GREATER_OR_EQUAL", "LESSER_OR_EQUAL", "GREATER", "LESSER", "EQUALITY", "NOT_EQUAL"):
+            op = self.current_token().type
+            self.advance()
+            right = self.parse_expression()
+
+            left = BooleanOperation(left, op, right)
+        return left
+
+    def parse_and(self)->ASTNode:
+        left = self.parse_comparison()
+
+        while self.current_token().type == "AND":
+            op = self.current_token().type
+            self.advance()
+            right = self.parse_comparison()
+
+            left = BooleanOperation(left, op, right)
+        return left
+
+    def parse_or(self)->ASTNode:
+        left = self.parse_and()
+
+        while self.current_token().type == "OR":
+            op = self.current_token().type
+            self.advance()
+            right = self.parse_and()
+
+            left = BooleanOperation(left, op, right)
+        return left
+
 # ##################################
 # Interpreter
 # ##################################
@@ -263,11 +328,20 @@ class Interpreter:
             return ast.value
         if isinstance(ast, IdentifierNode):
             return self.env.getVariable(ast.value)
+        if isinstance(ast, AssignmentNode):
+                    identifier = ast.identifier.value
+                    expression = self.evaluate(ast.expression)
+                    self.env.setVariable(identifier, expression)
+                    return None
+        if isinstance(ast, BooleanNode):
+                    return ast.value
         if isinstance(ast, UnaryOperation):
             if ast.op == 'PLUS':
                 return self.evaluate(ast.operand)
             if ast.op == 'MINUS':
                 return self.evaluate(ast.operand) * -1
+            if ast.op == 'NOT':
+                return not bool(self.evaluate(ast.operand))
             else:
                 raise PebbleRuntimeError(f"Unexpected Unary Operator {ast.op}")
         if isinstance(ast, BinaryOperation):
@@ -285,11 +359,31 @@ class Interpreter:
                 if right == 0: raise PebbleRuntimeError(f"division by zero")
                 return left / right
             else:
-                raise PebbleRuntimeError(f"Unexpected Operator {op}")
-        if isinstance(ast, AssignmentNode):
-            identifier = ast.identifier.value
-            expression = self.evaluate(ast.expression)
-            self.env.setVariable(identifier, expression)
+                raise PebbleRuntimeError(f"Unexpected Binary Operator {op}")
+        if isinstance(ast, BooleanOperation):
+            left = self.evaluate(ast.left)
+            right = self.evaluate(ast.right)
+            op = ast.op
+
+            match op:
+                case 'OR':
+                    return bool(left) or bool(right)
+                case 'AND':
+                    return bool(left) and bool(right)
+                case 'NOT_EQUAL':
+                    return left != right
+                case 'EQUALITY':
+                    return left == right
+                case 'LESSER':
+                    return left < right
+                case 'GREATER':
+                    return left > right
+                case 'LESSER_OR_EQUAL':
+                    return left <= right
+                case 'GREATER_OR_EQUAL':
+                    return left >= right
+                case _:
+                    raise PebbleRuntimeError(f"Unexpected Boolean Operator {op}")
 
 # ##################################
 # Errors
@@ -332,7 +426,6 @@ def run(text:str, env):
     """
     lexer = Lexer(text)
     tokens = lexer.tokenize()
-    print(tokens)
 
     parser = Parser(tokens)
     ast = parser.parse()

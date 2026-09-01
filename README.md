@@ -10,7 +10,7 @@ Pebble is currently under active development, with new language features being a
 
 ## Current Version
 
-**V1.2 — Variable Language**
+**V1.3 — Boolean Language**
 
 Pebble currently supports:
 
@@ -19,6 +19,8 @@ Pebble currently supports:
 * Operator precedence
 * Parentheses and nested parentheses
 * Unary `+` and `-` operators
+* Comparison `< <= > >= == !=` operators
+* Boolean operations like `and`, `or`, and `not`
 * Variables and assignment
 * Runtime environment for storing variables
 * Basic lexical, syntax, and runtime error handling
@@ -220,6 +222,26 @@ Example:
 x = 10
 
 x + 5
+```
+
+---
+### V1.3 — Boolean Language
+
+V1.2 introduces the foundation for storing and reusing values through **variables**.
+
+Added:
+
+* keywords (true, false)
+* comparison operations
+* and, or and not
+* new boolean Node
+
+Example:
+
+```text
+4>5
+
+5>=1
 ```
 
 ---
