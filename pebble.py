@@ -18,9 +18,9 @@ TOKEN_TYPES = [
     ('LESSER',           r'<'),
     ('EQUALITY',         r'=='),
     ('NOT_EQUAL',        r'!='),
-    ('AND',              r'and'),
-    ('OR',               r'or'),
-    ('NOT',              r'not'),
+    ('AND',              r'\band\b'),
+    ('OR',               r'\bor\b'),
+    ('NOT',              r'\bnot\b'),
     ('EQUAL',            r'='),
     ('PLUS',             r'\+'),
     ('MINUS',            r'-'),
@@ -32,6 +32,17 @@ TOKEN_TYPES = [
     ('IDENTIFIER',       r'[A-Za-z_][A-Za-z0-9_]*'),
     ('WHITESPACE',       r'\s+'),
 ]
+
+OPERATIONS = {
+    "PLUS": {},
+    "MINUS": {},
+    "MUL": {},
+    "DIV": {},
+    "GREATER": {},
+    "LESSER": {},
+    "EQUALITY": {},
+    "NOT_EQUAL": {},
+}
 
 class Token:
     def __init__(self, token_type, value:int|float|str|None, pos:dict[str, int]):
@@ -96,28 +107,37 @@ class Lexer:
 # ##################################
 
 class ASTNode:
-    pass
+    def is_truthy(self) -> bool:
+        raise PebbleRuntimeError(
+            f"{type(self).__name__} has no truthiness defined"
+        )
 
 class NumberNode(ASTNode):
     def __init__(self, value):
         self.value = value
 
+    def is_truthy(self) -> bool:
+        return self.value != 0
+
     def __repr__(self) -> str:
-        return f'NumberNode({self.value})'
+        return f'{self.value}'
 
 class BooleanNode(ASTNode):
-    def __init__(self, value):
+    def __init__(self, value: bool):
         self.value = value
 
+    def is_truthy(self) -> bool:
+        return self.value
+
     def __repr__(self) -> str:
-        return f'BooleanNode({self.value})'
+        return f'true' if self.value else 'false'
 
 class StringNode(ASTNode):
     def __init__(self, value):
             self.value = value
 
     def __repr__(self) -> str:
-        return f'StringNode({self.value})'
+        return f'{self.value}'
 
 class IdentifierNode(ASTNode):
     def __init__(self, value):
@@ -143,7 +163,7 @@ class BinaryOperation(ASTNode):
     def __repr__(self) -> str:
         return f'({self.left} {self.op} {self.right})'
 
-class AssignmentNode(ASTNode):
+class AssignmentOperation(ASTNode):
     def __init__(self, identifier:IdentifierNode, expression):
         self.identifier = identifier
         self.expression = expression
@@ -203,7 +223,7 @@ class Parser:
             )
         self.advance()
         expression = self.parse_or()
-        return AssignmentNode(identifier, expression)
+        return AssignmentOperation(identifier, expression)
 
     def parse_unary(self)->ASTNode:
         op = self.current_token().type
@@ -321,67 +341,109 @@ class Interpreter:
         self.ast = ast
         self.env = env
 
-    def evaluate(self, ast:ASTNode|None=None):
-        if ast is None:
-            return self.evaluate(self.ast)
+    def evaluate(self):
+        return self.evaluator(self.ast)
+
+    def evaluator(self, ast:ASTNode):
         if isinstance(ast, NumberNode):
-            return ast.value
+            return ast
+        if isinstance(ast, BooleanNode):
+                    return ast
         if isinstance(ast, IdentifierNode):
             return self.env.getVariable(ast.value)
-        if isinstance(ast, AssignmentNode):
-                    identifier = ast.identifier.value
-                    expression = self.evaluate(ast.expression)
-                    self.env.setVariable(identifier, expression)
-                    return None
-        if isinstance(ast, BooleanNode):
-                    return ast.value
+        if isinstance(ast, AssignmentOperation):
+            identifier = ast.identifier.value
+            expression = self.evaluator(ast.expression)
+            self.env.setVariable(identifier, expression)
+            return None
         if isinstance(ast, UnaryOperation):
-            if ast.op == 'PLUS':
-                return self.evaluate(ast.operand)
-            if ast.op == 'MINUS':
-                return self.evaluate(ast.operand) * -1
-            if ast.op == 'NOT':
-                return not bool(self.evaluate(ast.operand))
-            else:
-                raise PebbleRuntimeError(f"Unexpected Unary Operator {ast.op}")
+
+            CASES = [(NumberNode, BooleanNode)]
+            op = ast.op
+            operand = ast.operand
+
+            match op:
+                case 'PLUS':
+                    if isinstance(operand, CASES[0]):
+                        return NumberNode(self.evaluator(operand).value)
+                    raise PebbleRuntimeError(f"Invalid operand for unary {op}")
+                case 'MINUS':
+                    if isinstance(operand, CASES[0]):
+                        return NumberNode(self.evaluator(operand).value * -1)
+                    raise PebbleRuntimeError(f"Invalid operand for unary {op}")
+                case 'NOT':
+                    if isinstance(operand, CASES[0]):
+                        return BooleanNode(not self.evaluator(operand).is_truthy())
+                    raise PebbleRuntimeError(f"Invalid operand for unary {op}")
+                case _:
+                    raise PebbleRuntimeError(f"Unexpected Unary Operator {op}")
         if isinstance(ast, BinaryOperation):
-            left = self.evaluate(ast.left)            
-            right = self.evaluate(ast.right)
+            left = self.evaluator(ast.left)            
+            right = self.evaluator(ast.right)
             op = ast.op
 
-            if op == "PLUS":
-                return left + right
-            elif op == "MINUS":
-                return left - right
-            elif op == "MUL":
-                return left * right
-            elif op == "DIV":
-                if right == 0: raise PebbleRuntimeError(f"division by zero")
-                return left / right
-            else:
-                raise PebbleRuntimeError(f"Unexpected Binary Operator {op}")
+            CASES = [(NumberNode, BooleanNode)]
+
+            match op:
+                case "PLUS":
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return NumberNode(left.value + right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
+                case "MINUS":
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return NumberNode(left.value - right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
+                case "MUL":
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return NumberNode(left.value * right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
+                case "DIV":
+                    if right.value == 0: raise PebbleRuntimeError(f"division by zero")
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return NumberNode(left.value / right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
+                case _:
+                    raise PebbleRuntimeError(f"Unexpected Binary Operator {op}")
         if isinstance(ast, BooleanOperation):
-            left = self.evaluate(ast.left)
-            right = self.evaluate(ast.right)
+            left = self.evaluator(ast.left)
+            right = self.evaluator(ast.right)
             op = ast.op
+
+            CASES = [(NumberNode, BooleanNode)]
 
             match op:
                 case 'OR':
-                    return bool(left) or bool(right)
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.is_truthy() or right.is_truthy())
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case 'AND':
-                    return bool(left) and bool(right)
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.is_truthy() and right.is_truthy())
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case 'NOT_EQUAL':
-                    return left != right
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.value != right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case 'EQUALITY':
-                    return left == right
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.value == right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case 'LESSER':
-                    return left < right
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.value < right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case 'GREATER':
-                    return left > right
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.value > right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case 'LESSER_OR_EQUAL':
-                    return left <= right
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.value <= right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case 'GREATER_OR_EQUAL':
-                    return left >= right
+                    if isinstance(left, CASES[0]) and isinstance(right, CASES[0]):
+                        return BooleanNode(left.value >= right.value)
+                    raise PebbleRuntimeError(f"Invalid operands for {op}")
                 case _:
                     raise PebbleRuntimeError(f"Unexpected Boolean Operator {op}")
 
@@ -429,7 +491,6 @@ def run(text:str, env):
 
     parser = Parser(tokens)
     ast = parser.parse()
-    print(ast)
 
     if ast is None:
         return None

@@ -10,58 +10,72 @@ Pebble is currently under active development, with new language features being a
 
 ## Current Version
 
-**V1.3 — Boolean Language**
+**V1.3.1 — Boolean Language Patch**
 
 Pebble currently supports:
 
-* Integers and floating-point numbers
-* Addition, subtraction, multiplication, and division
-* Operator precedence
-* Parentheses and nested parentheses
-* Unary `+` and `-` operators
-* Comparison `< <= > >= == !=` operators
-* Boolean operations like `and`, `or`, and `not`
-* Variables and assignment
-* Runtime environment for storing variables
-* Basic lexical, syntax, and runtime error handling
-* Interactive REPL
+- Integers and floating-point numbers
+- Addition, subtraction, multiplication, and division
+- Operator precedence
+- Parentheses and nested parentheses
+- Unary `+` and `-` operators
+- Comparison operators: `<`, `<=`, `>`, `>=`, `==`, `!=`
+- Boolean operations: `and`, `or`, and `not`
+- Variables and assignment
+- A runtime environment for storing variables
+- Basic lexical, syntax, and runtime error handling
+- An interactive REPL
 
-Example:
+### Example
 
 ```text
 pebble > x = 10
-10
 
 pebble > x + 5
 15
 
 pebble > x * 2
 20
+
+pebble > x > 15
+false
+
+pebble > x > 5 and x < 20
+true
 ```
 
 ---
 
 ## How Pebble Works
 
-Pebble processes code through several stages:
+Pebble processes source code through a simple interpreter pipeline:
 
 ```text
 Source Code
-    ↓
-Lexer
-    ↓
-Tokens
-    ↓
-Parser
-    ↓
-AST
-    ↓
-Interpreter
-    ↓
-Environment
-    ↓
-Result
+     ↓
+   Lexer
+     ↓
+   Tokens
+     ↓
+   Parser
+     ↓
+     AST
+     ↓
+ Interpreter
+     ↓
+ Environment
+     ↓
+   Result
 ```
+
+Each stage has a specific responsibility:
+
+- **Lexer** — Converts source code into a sequence of tokens.
+- **Parser** — Converts tokens into an Abstract Syntax Tree (AST) while enforcing the language's grammar and operator precedence.
+- **AST** — Represents the structure of the program as a tree of language constructs.
+- **Interpreter** — Evaluates the AST according to Pebble's semantics.
+- **Environment** — Stores and retrieves variables during execution.
+- **Result** — Produces the final evaluated value or an appropriate error.
 
 ### Lexer
 
@@ -227,7 +241,7 @@ x + 5
 ---
 ### V1.3 — Boolean Language
 
-V1.2 introduces the foundation for storing and reusing values through **variables**.
+V1.3 introduces the foundation for storing and reusing values through **variables**.
 
 Added:
 
@@ -243,6 +257,15 @@ Example:
 
 5>=1
 ```
+
+---
+### V1.3.1 — Boolean Language Patch.
+
+V1.3.1 introduces the foundation for storing and reusing values through **variables**.
+
+This update completely focussed:
+* Returning Pebble Nodes as output instead of Python outputs.
+* Fixing Bugs
 
 ---
 
